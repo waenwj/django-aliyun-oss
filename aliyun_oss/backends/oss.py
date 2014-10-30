@@ -10,7 +10,6 @@ except ImportError:
 from django.conf import settings
 from django.core.files.base import File
 from django.core.files.storage import Storage
-from django.core.exceptions import ImproperlyConfigured
 
 from aliyun_oss.oss.oss_api import OssAPI
 from aliyun_oss.oss.oss_util import convert_header2map, safe_get_element
@@ -76,7 +75,7 @@ class OSSStorage(Storage):
         })
         fp = StringIO(content)
         response = self.connection.put_object_from_fp(self.bucket, name, fp, content_type, self.headers)
-        if (res.status / 100) != 2:
+        if (response.status / 100) != 2:
             raise IOError("OSSStorageError: %s" % response.read())
 
     def _open(self, name, mode='rb'):
@@ -91,7 +90,7 @@ class OSSStorage(Storage):
         else:
             headers = {'Range': 'bytes=%s-%s' % (start_range, end_range)}
         response = self.connection.get_object(self.bucket, name, headers)
-        if (res.status / 100) != 2:
+        if (response.status / 100) != 2:
             raise IOError("OSSStorageError: %s" % response.read())
 
         header_map = convert_header2map(response.getheaders())
@@ -138,7 +137,7 @@ class OSSStorage(Storage):
             raise NotImplementedError()
         name = self._clean_name(name)
         response = self.connection.head_object(self.bucket, name)
-        header_map = convert_header2map(response.getheaders())
+        #header_map = convert_header2map(response.getheaders())
         last_modified = response.getheader('Last-Modified')
         # convert to string to date
         last_modified_date = parser.parse(last_modified)
