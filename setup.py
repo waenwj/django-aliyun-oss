@@ -18,6 +18,7 @@ setup(
     license='Apache2',
     requires=[
         'Django',
+        'alioss',
     ],
     classifiers=[
         'Development Status :: 4 - Beta',
