@@ -3,9 +3,9 @@ import os
 import mimetypes
 
 try:
-    from cStringIO import StringIO
-except ImportError:
     from StringIO import StringIO
+except ImportError:
+    from io import StringIO
 
 from django.conf import settings
 from django.core.files.base import File
