@@ -1,14 +1,14 @@
 #!/usr/bin/env python
 #coding=utf-8
-import urllib
+import urllib.request, urllib.parse, urllib.error
 import base64
 import hmac
 import time
 from hashlib import sha1 as sha
 import os
 import sys
-import md5
-import StringIO
+from hashlib import md5
+import io
 from threading import Thread
 import logging
 from logging.handlers import RotatingFileHandler
@@ -19,13 +19,14 @@ except:
     from aliyun_oss.oss.oss_xml_handler import *
 
 #LOG_LEVEL can be one of DEBUG INFO ERROR CRITICAL WARNNING
-DEBUG = False 
-LOG_LEVEL = "DEBUG" 
+DEBUG = False
+LOG_LEVEL = "DEBUG"
 PROVIDER = "OSS"
 SELF_DEFINE_HEADER_PREFIX = "x-oss-"
 if "AWS" == PROVIDER:
     SELF_DEFINE_HEADER_PREFIX = "x-amz-"
 
+logger = logging.getLogger(__name__)
 # def getlogger(debug=DEBUG, log_level=LOG_LEVEL, log_name="log.txt"):
 #     if not debug:
 #         logger = logging.getLogger('oss')
@@ -115,8 +116,8 @@ def _format_header(headers=None):
     if not headers:
         headers = {}
     tmp_headers = {}
-    for k in headers.keys():
-        if isinstance(headers[k], unicode):
+    for k in list(headers.keys()):
+        if isinstance(headers[k], str):
             headers[k] = headers[k].encode('utf-8')
 
         if k.lower().startswith(SELF_DEFINE_HEADER_PREFIX):
@@ -144,20 +145,32 @@ def get_assign(secret_access_key, method, headers=None, resource="/", result=Non
     content_md5 = safe_get_element('Content-MD5', headers)
     content_type = safe_get_element('Content-Type', headers)
     date = safe_get_element('Date', headers)
-    canonicalized_resource = resource
+    canonicalized_resource = resource.decode() if isinstance(resource, bytes) else resource
     tmp_headers = _format_header(headers)
     if len(tmp_headers) > 0:
-        x_header_list = tmp_headers.keys()
+        x_header_list = list(tmp_headers.keys())
         x_header_list.sort()
         for k in x_header_list:
             if k.startswith(SELF_DEFINE_HEADER_PREFIX):
-                canonicalized_oss_headers += "%s:%s\n" % (k, tmp_headers[k]) 
+                v = tmp_headers[k]
+                if isinstance(v, bytes):
+                    v = v.decode()
+                canonicalized_oss_headers += "%s:%s\n" % (k, v)
+    # logger.debug('method:{}, type:{}'.format(method, type(method)))
+    # logger.debug('content_md5:{}, type:{}'.format(content_md5, type(content_md5)))
+    # logger.debug('content_type:{}, type:{}'.format(content_type, type(content_type)))
+    # logger.debug('date:{}, type:{}'.format(date, type(date)))
+    # logger.debug('canonicalized_oss_headers:{}, type:{}'.format(canonicalized_oss_headers, type(canonicalized_oss_headers)))
+    # logger.debug('canonicalized_resource:{}, type:{}'.format(canonicalized_resource, type(canonicalized_resource)))
     string_to_sign = method + "\n" + content_md5.strip() + "\n" + content_type + "\n" + date + "\n" + canonicalized_oss_headers + canonicalized_resource
     result.append(string_to_sign)
     # logger.debug("method:%s\n content_md5:%s\n content_type:%s\n data:%s\n canonicalized_oss_headers:%s\n canonicalized_resource:%s\n" % (method, content_md5, content_type, date, canonicalized_oss_headers, canonicalized_resource))
     # logger.debug("string_to_sign:%s\n \nlength of string_to_sign:%d\n" % (string_to_sign, len(string_to_sign)))
-    h = hmac.new(secret_access_key, string_to_sign, sha)
-    sign_result = base64.encodestring(h.digest()).strip()
+    #
+    # logger.debug("secret_access_key: {}, string_to_sign: {}".format(secret_access_key, string_to_sign))
+    h = hmac.new(secret_access_key.encode('utf-8'), string_to_sign.encode('utf-8'), sha)
+    sign_result = base64.encodestring(h.digest()).decode('utf-8').strip()
+    # logger.debug('sign_result: {}'.format(sign_result))
     # logger.debug("sign result:%s" % sign_result)
     return sign_result
 
@@ -165,7 +178,7 @@ def get_resource(params=None):
     if not params:
         return ""
     tmp_headers = {}
-    for k, v in params.items():
+    for k, v in list(params.items()):
         tmp_k = k.lower().strip()
         tmp_headers[tmp_k] = v
     override_response_list = ['response-content-type', 'response-content-language', \
@@ -177,13 +190,13 @@ def get_resource(params=None):
     resource = ""
     separator = "?"
     for i in override_response_list:
-        if tmp_headers.has_key(i.lower()):
+        if i.lower() in tmp_headers:
             resource += separator
             resource += i
             tmp_key = str(tmp_headers[i.lower()])
             if len(tmp_key) != 0:
                 resource += "="
-                resource += tmp_key 
+                resource += tmp_key
             separator = '&'
     return resource
 
@@ -192,18 +205,18 @@ def append_param(url, params):
     convert the parameters to query string of URI.
     '''
     l = []
-    for k, v in params.items():
+    for k, v in list(params.items()):
         k = k.replace('_', '-')
         if  k == 'maxkeys':
             k = 'max-keys'
-        if isinstance(v, unicode):
+        if isinstance(v, str):
             v = v.encode('utf-8')
         if v is not None and v != '':
-            l.append('%s=%s' % (urllib.quote(k), urllib.quote(str(v))))
+            l.append('%s=%s' % (urllib.parse.quote(k), urllib.parse.quote(str(v))))
         elif k == 'acl':
-            l.append('%s' % (urllib.quote(k)))
+            l.append('%s' % (urllib.parse.quote(k)))
         elif v is None or v == '':
-            l.append('%s' % (urllib.quote(k)))
+            l.append('%s' % (urllib.parse.quote(k)))
     if len(l):
         url = url + '?' + '&'.join(l)
     return url
@@ -219,7 +232,7 @@ def create_object_group_msg_xml(part_msg_list=None):
     xml_string = r'<CreateFileGroup>'
     for part in part_msg_list:
         if len(part) >= 3:
-            if isinstance(part[1], unicode):
+            if isinstance(part[1], str):
                 file_path = part[1].encode('utf-8')
             else:
                 file_path = part[1]
@@ -230,7 +243,7 @@ def create_object_group_msg_xml(part_msg_list=None):
             xml_string += r'<ETag>"' + str(part[2]).upper() + r'"</ETag>'
             xml_string += r'</Part>'
         else:
-            print "the ", part, " in part_msg_list is not as expected!"
+            print("the ", part, " in part_msg_list is not as expected!")
             return ""
     xml_string += r'</CreateFileGroup>'
 
@@ -251,7 +264,7 @@ def create_part_xml(part_msg_list=None):
             xml_string += r'<ETag>"' + str(part[2]).upper() + r'"</ETag>'
             xml_string += r'</Part>'
         else:
-            print "the ", part, " in part_msg_list is not as expected!"
+            print("the ", part, " in part_msg_list is not as expected!")
             return ""
     xml_string += r'</CompleteMultipartUpload>'
 
@@ -271,7 +284,7 @@ def create_delete_object_msg_xml(object_list=None, is_quiet=False, is_defult=Fal
             xml_string += r'<Quiet>false</Quiet>'
     for object in object_list:
         key = object.strip()
-        if isinstance(object, unicode):
+        if isinstance(object, str):
             key = object.encode('utf-8')
         key = escape(key)
         xml_string += r'<Object><Key>%s</Key></Object>' % key
@@ -308,7 +321,7 @@ def clear_all_objects_in_bucket(oss_instance, bucket, delete_marker="", delete_u
     delete_all_parts(oss_instance, bucket, delete_marker, delete_upload_id_marker, debug)
     res = oss_instance.delete_bucket(bucket)
     if (res.status / 100 != 2 and res.status != 404):
-        print "clear_all_objects_in_bucket: delete bucket:%s fail, ret:%s, request id:%s" % (bucket, res.status, res.getheader("x-oss-request-id"))
+        print("clear_all_objects_in_bucket: delete bucket:%s fail, ret:%s, request id:%s" % (bucket, res.status, res.getheader("x-oss-request-id")))
         return False
     return True
 
@@ -330,16 +343,16 @@ def delete_all_objects(oss_instance, bucket, prefix="", delimiter="", delete_mar
             res = oss_instance.batch_delete_object(bucket, object_list_xml)
             if res.status/100 != 2:
                 if marker:
-                    print "delete_all_objects: batch delete objects in bucket:%s fail, ret:%s, request id:%s, first object:%s, marker:%s" % (bucket, res.status, res.getheader("x-oss-request-id"), object_list[0], marker)
+                    print("delete_all_objects: batch delete objects in bucket:%s fail, ret:%s, request id:%s, first object:%s, marker:%s" % (bucket, res.status, res.getheader("x-oss-request-id"), object_list[0], marker))
                 else:
-                    print "delete_all_objects: batch delete objects in bucket:%s fail, ret:%s, request id:%s, first object:%s" % (bucket, res.status, res.getheader("x-oss-request-id"), object_list[0])
+                    print("delete_all_objects: batch delete objects in bucket:%s fail, ret:%s, request id:%s, first object:%s" % (bucket, res.status, res.getheader("x-oss-request-id"), object_list[0]))
             else:
                 if debug:
                     delete_obj_num += len(object_list)
                     if marker:
-                        print "delete_all_objects: Now %s objects deleted, marker:%s" % (delete_obj_num, marker)
+                        print("delete_all_objects: Now %s objects deleted, marker:%s" % (delete_obj_num, marker))
                     else:
-                        print "delete_all_objects: Now %s objects deleted" % (delete_obj_num)
+                        print("delete_all_objects: Now %s objects deleted" % (delete_obj_num))
         if len(marker) == 0:
             break
 
@@ -356,15 +369,15 @@ def delete_all_parts(oss_instance, bucket, delete_object_marker="", delete_uploa
         (fl, pl) = hh.list()
         for i in fl:
             object = i[0]
-            if isinstance(i[0], unicode):
+            if isinstance(i[0], str):
                 object = i[0].encode('utf-8')
             res = oss_instance.cancel_upload(bucket, object, i[1])
             if (res.status / 100 != 2 and res.status != 404):
-                print "delete_all_parts: cancel upload object:%s, upload_id:%s FAIL, ret:%s, request-id:%s" % (object, i[1], res.status, res.getheader("x-oss-request-id"))
+                print("delete_all_parts: cancel upload object:%s, upload_id:%s FAIL, ret:%s, request-id:%s" % (object, i[1], res.status, res.getheader("x-oss-request-id")))
             else:
                 delete_mulitipart_num += 1
                 if debug:
-                    print "delete_all_parts: cancel upload object:%s, upload_id:%s OK\nNow %s parts deleted." % (object, i[1], delete_mulitipart_num)
+                    print("delete_all_parts: cancel upload object:%s, upload_id:%s OK\nNow %s parts deleted." % (object, i[1], delete_mulitipart_num))
         if hh.is_truncated:
             marker = hh.next_key_marker
             id_marker = hh.next_upload_id_marker
@@ -382,13 +395,13 @@ def clean_all_bucket(oss_instance):
         h = GetServiceXml(res.read())
         for b in h.bucket_list:
             if not clear_all_objects_in_bucket(oss_instance, b.name):
-                print "clean bucket ", b.name, " failed! in clean_all_bucket"
+                print("clean bucket ", b.name, " failed! in clean_all_bucket")
                 return False
         return True
     else:
-        print "failed! get service in clean_all_bucket return ", res.status
-        print res.read()
-        print res.getheaders()
+        print("failed! get service in clean_all_bucket return ", res.status)
+        print(res.read())
+        print(res.getheaders())
         return False
 
 def pgfs_clear_all_objects_in_bucket(oss_instance, bucket):
@@ -412,14 +425,14 @@ def pgfs_clear_all_objects_in_bucket(oss_instance, bucket):
     for i in b.object_list:
         res = oss_instance.delete_object(bucket, i)
         if (res.status / 100 != 2):
-            print "clear_all_objects_in_bucket: delete object fail, ret is:", res.status, "bucket is:", bucket, "object is: ", i
+            print("clear_all_objects_in_bucket: delete object fail, ret is:", res.status, "bucket is:", bucket, "object is: ", i)
             return False
         else:
             pass
 
     res = oss_instance.delete_bucket(bucket)
     if (res.status / 100 != 2 and res.status != 404):
-        print "clear_all_objects_in_bucket: delete bucket fail, ret is: %s, request id is:%s" % (res.status, res.getheader("x-oss-request-id"))
+        print("clear_all_objects_in_bucket: delete bucket fail, ret is: %s, request id is:%s" % (res.status, res.getheader("x-oss-request-id")))
         return False
     return True
 
@@ -431,7 +444,7 @@ def pgfs_clean_all_bucket(oss_instance):
     if (res.status / 100) == 2:
         h = GetServiceXml(res.read())
         for b in h.bucket_list:
-            print b
+            print(b)
             '''
             if not pgfs_clear_all_objects_in_bucket(oss_instance, b.name):
                 print "clean bucket ", b.name, " failed! in clean_all_bucket"
@@ -439,9 +452,9 @@ def pgfs_clean_all_bucket(oss_instance):
             '''
         return True
     else:
-        print "failed! get service in clean_all_bucket return ", res.status
-        print res.read()
-        print res.getheaders()
+        print("failed! get service in clean_all_bucket return ", res.status)
+        print(res.read())
+        print(res.getheaders())
         return False
 
 def delete_all_parts_of_object_group(oss, bucket, object_group_name):
@@ -455,7 +468,7 @@ def delete_all_parts_of_object_group(oss, bucket, object_group_name):
                 part_name = i[1].strip()
                 res = oss.delete_object(bucket, part_name)
                 if res.status != 204:
-                    print "delete part ", part_name, " in bucket:", bucket, " failed!"
+                    print("delete part ", part_name, " in bucket:", bucket, " failed!")
                     return False
     else:
         return False
@@ -475,7 +488,7 @@ class GetAllObjects:
             (fl, pl) = hh.list()
             if len(fl) != 0:
                 for i in fl:
-                    if isinstance(i[0], unicode):
+                    if isinstance(i[0], str):
                         object = i[0].encode('utf-8')
                         object_list.append(object)
 
@@ -501,7 +514,7 @@ def get_all_buckets(oss):
         h = GetServiceXml(res.read())
         for b in h.bucket_list:
             bucket_list.append(str(b.name).strip())
-    return bucket_list 
+    return bucket_list
 
 def get_object_list_marker_from_xml(body):
     #return ([(object_name, object_length, last_modify_time)...], marker)
@@ -511,7 +524,7 @@ def get_object_list_marker_from_xml(body):
     (fl, pl) = hh.list()
     if len(fl) != 0:
         for i in fl:
-            if isinstance(i[0], unicode):
+            if isinstance(i[0], str):
                 object = i[0].encode('utf-8')
             else:
                 object = i[0]
@@ -538,9 +551,9 @@ def get_upload_id(oss, bucket, object, headers=None):
         h = GetInitUploadIdXml(body)
         upload_id = h.upload_id
     else:
-        print res.status
-        print res.getheaders()
-        print res.read()
+        print(res.status)
+        print(res.getheaders())
+        print(res.read())
     return upload_id
 
 def get_all_upload_id_list(oss, bucket):
@@ -685,7 +698,7 @@ class DeleteObjectWorker(Thread):
                     retry_times = retry_times - 1
                     time.sleep(1)
             if is_fail:
-                print "delete object_list[%s:%s] failed!, first is %s" % (begin, end, object_list[begin])
+                print("delete object_list[%s:%s] failed!, first is %s" % (begin, end, object_list[begin]))
             begin = end
             remain_length = remain_length - step
 
@@ -703,7 +716,7 @@ class PutObjectGroupWorker(Thread):
             if len(part) == 5:
                 bucket = self.bucket
                 file_name = part[1]
-                if isinstance(file_name, unicode):
+                if isinstance(file_name, str):
                     filename = file_name.encode('utf-8')
                 object_name = file_name
                 retry_times = self.retry_times
@@ -736,8 +749,8 @@ class PutObjectGroupWorker(Thread):
                             break
                         res = self.oss.put_object_from_file_given_pos(bucket, object_name, self.file_path, offset, partsize)
                         if res.status != 200:
-                            print "upload ", file_name, "failed!", " ret is:", res.status
-                            print "headers", res.getheaders()
+                            print("upload ", file_name, "failed!", " ret is:", res.status)
+                            print("headers", res.getheaders())
                             retry_times = retry_times - 1
                             time.sleep(1)
                         else:
@@ -747,7 +760,7 @@ class PutObjectGroupWorker(Thread):
                         time.sleep(1)
 
             else:
-                print "ERROR! part", part , " is not as expected!"
+                print("ERROR! part", part , " is not as expected!")
 
 class UploadPartWorker(Thread):
     def __init__(self, oss, bucket, object, upoload_id, file_path, part_msg_list, uploaded_part_map, retry_times=5, debug=DEBUG):
@@ -768,7 +781,7 @@ class UploadPartWorker(Thread):
             if len(part) == 5:
                 bucket = self.bucket
                 object = self.object
-                if self.uploaded_part_map.has_key(part_number):
+                if part_number in self.uploaded_part_map:
                     md5 = part[2]
                     if self.uploaded_part_map[part_number].replace('"', "").upper() == md5.upper():
                         continue
@@ -838,8 +851,8 @@ class MultiGetWorker(Thread):
                 pass
             retry_times += 1
             if retry_times > self.retry_times:
-                print "ERROR, reach max retry times:%s when multi get /%s/%s" % (self.retry_times, self.bucket, self.object)
-                break 
+                print("ERROR, reach max retry times:%s when multi get /%s/%s" % (self.retry_times, self.bucket, self.object))
+                break
 
         self.file.flush()
         self.file.close()
@@ -861,7 +874,7 @@ def split_large_file(file_path, object_prefix="", max_part_num=1000, part_size=1
 
         part_num = (file_size + part_size - 1) / part_size
 
-        for i in xrange(0, part_num):
+        for i in range(0, part_num):
             left_len = part_size
             real_part_size = 0
             m = md5.new()
@@ -884,7 +897,7 @@ def split_large_file(file_path, object_prefix="", max_part_num=1000, part_size=1
             md5sum = m.hexdigest()
 
             temp_file_name = os.path.basename(file_path) + "_" + str(part_order)
-            if isinstance(object_prefix, unicode):
+            if isinstance(object_prefix, str):
                 object_prefix = object_prefix.encode('utf-8')
             if not object_prefix:
                 file_name = sum_string(temp_file_name) + "_" + temp_file_name
@@ -896,7 +909,7 @@ def split_large_file(file_path, object_prefix="", max_part_num=1000, part_size=1
 
         fp.close()
     else:
-        print "ERROR! No file: ", file_path, ", please check."
+        print("ERROR! No file: ", file_path, ", please check.")
 
     return parts_list
 
@@ -946,7 +959,7 @@ def md5sum2(filename, offset=0, partsize=0):
     return md5sum
 
 def sum_string(content):
-    f = StringIO.StringIO(content)
+    f = io.BytesIO(content)
     md5sum = sumfile(f)
     f.close()
     return md5sum
@@ -958,8 +971,10 @@ def convert_header2map(header_list):
     return header_map
 
 def safe_get_element(name, container):
-    for k, v in container.items():
+    for k, v in list(container.items()):
         if k.strip().lower() == name.strip().lower():
+            if isinstance(v, bytes):
+                return v.decode()
             return v
     return ""
 
@@ -979,16 +994,16 @@ def get_content_type_by_filename(file_name):
 def smart_code(input_stream):
     if isinstance(input_stream, str):
         try:
-            tmp = unicode(input_stream, 'utf-8')
+            tmp = str(input_stream, 'utf-8')
         except UnicodeDecodeError:
             try:
-                tmp = unicode(input_stream, 'gbk')
+                tmp = str(input_stream, 'gbk')
             except UnicodeDecodeError:
                 try:
-                    tmp = unicode(input_stream, 'big5')
+                    tmp = str(input_stream, 'big5')
                 except UnicodeDecodeError:
                     try:
-                        tmp = unicode(input_stream, 'ascii')
+                        tmp = str(input_stream, 'ascii')
                     except:
                         tmp = input_stream
     else:
