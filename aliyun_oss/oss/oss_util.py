@@ -155,6 +155,8 @@ def get_assign(secret_access_key, method, headers=None, resource="/", result=Non
                 v = tmp_headers[k]
                 if isinstance(v, bytes):
                     v = v.decode()
+                if isinstance(k, bytes):
+                    k = k.decode()
                 canonicalized_oss_headers += "%s:%s\n" % (k, v)
     # logger.debug('method:{}, type:{}'.format(method, type(method)))
     # logger.debug('content_md5:{}, type:{}'.format(content_md5, type(content_md5)))
