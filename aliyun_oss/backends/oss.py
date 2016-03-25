@@ -185,11 +185,13 @@ class OSSStorageFile(File):
     def read(self, num_bytes=None):
         if self.start_range == -1:
             return None
-        if num_bytes is None:
-            args = []
-            self.start_range = 0
-        else:
-            args = [self.start_range, self.start_range + num_bytes - 1]
+        # if num_bytes is None:
+        #     args = []
+        #     self.start_range = 0
+        # else:
+        #     args = [self.start_range, self.start_range + num_bytes - 1]
+        args = []
+        self.start_range = 0
         # print(args)
         data, etags, content_range = self._storage._read(self._name, *args)
         # print(self._name, "====={}+++".format(content_range))
@@ -198,8 +200,9 @@ class OSSStorageFile(File):
             current_range, size = content_range.split(' ', 1)[1].split('/', 1)
             start_range, end_range = current_range.split('-', 1)
             self._size, self.start_range = int(size), int(end_range) + 1
-        else:
-            self.start_range = -1
+        # else:
+        #     self.start_range = -1
+        self.start_range = -1
         self.file = BytesIO(data)
         return self.file.getvalue()
 
