@@ -91,7 +91,7 @@ class OSSStorage(Storage):
             headers = {'Range': 'bytes=%s-%s' % (start_range, end_range)}
         response = self.connection.get_object(self.bucket, name, headers)
         if (response.status / 100) != 2:
-            raise IOError("OSSStorageError: %s" % response.read())
+            raise IOError("OSSStorageError: %s, %s" % (response.status, response.read()))
 
         header_map = convert_header2map(response.getheaders())
         # content_len = safe_get_element("content-length", header_map)
