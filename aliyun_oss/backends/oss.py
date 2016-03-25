@@ -190,7 +190,7 @@ class OSSStorageFile(File):
             self.start_range = 0
         else:
             args = [self.start_range, self.start_range + num_bytes - 1]
-        print(args)
+        # print(args)
         data, etags, content_range = self._storage._read(self._name, *args)
         # print(self._name, "====={}+++".format(content_range))
         if content_range:
