@@ -3,7 +3,6 @@ import os
 import mimetypes
 import logging
 
-
 from io import BytesIO
 
 from django.conf import settings
@@ -13,30 +12,30 @@ from django.core.files.storage import Storage
 from aliyun_oss.oss.oss_api import OssAPI
 from aliyun_oss.oss.oss_util import convert_header2map, safe_get_element
 
-ACCESS_ADDRESS          = getattr(settings, 'OSS_ACCESS_URL', 'oss.aliyuncs.com')
-ACCESS_KEY_NAME     = getattr(settings, 'OSS_ACCESS_KEY_ID')
-SECRET_KEY_NAME     = getattr(settings, 'OSS_SECRET_ACCESS_KEY')
-HEADERS             = getattr(settings, 'OSS_HEADERS', {})
-DEFAULT_ACL         = getattr(settings, 'OSS_DEFAULT_ACL', 'public-read')
+ACCESS_ADDRESS = getattr(settings, 'OSS_ACCESS_URL', 'oss.aliyuncs.com')
+ACCESS_KEY_NAME = getattr(settings, 'OSS_ACCESS_KEY_ID')
+SECRET_KEY_NAME = getattr(settings, 'OSS_SECRET_ACCESS_KEY')
+HEADERS = getattr(settings, 'OSS_HEADERS', {})
+DEFAULT_ACL = getattr(settings, 'OSS_DEFAULT_ACL', 'public-read')
 OSS_STORAGE_BUCKET_NAME = getattr(settings, 'OSS_STORAGE_BUCKET_NAME')
-BUCKET_PREFIX       = getattr(settings, 'OSS_BUCKET_PREFIX', '')
-
+BUCKET_PREFIX = getattr(settings, 'OSS_BUCKET_PREFIX', '')
 
 logger = logging.getLogger(__name__)
+
 
 class OSSStorage(Storage):
     """Aliyun Open Storage Service"""
 
     def __init__(self, bucket=OSS_STORAGE_BUCKET_NAME,
-                access_key=None,
-                secret_key=None,
-                acl=DEFAULT_ACL,
-                # calling_format=CALLING_FORMAT,
-                encrypt=False,
-                # gzip=IS_GZIPPED,
-                # gzip_content_types=GZIP_CONTENT_TYPES,
-                # preload_metadata=PRELOAD_METADATA
-            ):
+                 access_key=None,
+                 secret_key=None,
+                 acl=DEFAULT_ACL,
+                 # calling_format=CALLING_FORMAT,
+                 encrypt=False,
+                 # gzip=IS_GZIPPED,
+                 # gzip_content_types=GZIP_CONTENT_TYPES,
+                 # preload_metadata=PRELOAD_METADATA
+                 ):
         self.bucket = bucket
         self.acl = acl
 
@@ -45,7 +44,6 @@ class OSSStorage(Storage):
 
         self.connection = OssAPI(ACCESS_ADDRESS, access_key, secret_key)
         self.headers = HEADERS
-
 
     def _get_access_keys(self):
         access_key = ACCESS_KEY_NAME
@@ -135,12 +133,12 @@ class OSSStorage(Storage):
 
     def modified_time(self, name):
         try:
-           from dateutil import parser, tz
+            from dateutil import parser, tz
         except ImportError:
             raise NotImplementedError()
         name = self._clean_name(name)
         response = self.connection.head_object(self.bucket, name)
-        #header_map = convert_header2map(response.getheaders())
+        # header_map = convert_header2map(response.getheaders())
         last_modified = response.getheader('Last-Modified')
         # convert to string to date
         last_modified_date = parser.parse(last_modified)
@@ -151,7 +149,7 @@ class OSSStorage(Storage):
         return last_modified_date.astimezone(tz.tzlocal()).replace(tzinfo=None)
 
     ## UNCOMMENT BELOW IF NECESSARY
-    #def get_available_name(self, name):
+    # def get_available_name(self, name):
     #    """ Overwrite existing file with the same name. """
     #    name = self._clean_name(name)
     #    return name
@@ -185,16 +183,23 @@ class OSSStorageFile(File):
         return self._size
 
     def read(self, num_bytes=None):
+        if self.start_range == -1:
+            return None
         if num_bytes is None:
             args = []
             self.start_range = 0
         else:
-            args = [self.start_range, self.start_range+num_bytes-1]
+            args = [self.start_range, self.start_range + num_bytes - 1]
+        print(args)
         data, etags, content_range = self._storage._read(self._name, *args)
-        if content_range is not None:
+        # print(self._name, "====={}+++".format(content_range))
+        if content_range:
+            # print(content_range)
             current_range, size = content_range.split(' ', 1)[1].split('/', 1)
             start_range, end_range = current_range.split('-', 1)
-            self._size, self.start_range = int(size), int(end_range)+1
+            self._size, self.start_range = int(size), int(end_range) + 1
+        else:
+            self.start_range = -1
         self.file = BytesIO(data)
         return self.file.getvalue()
 
