@@ -96,7 +96,8 @@ class OSSStorage(Storage):
             raise IOError("OSSStorageError: %s" % response.read())
 
         header_map = convert_header2map(response.getheaders())
-        content_len = safe_get_element("content-length", header_map)
+        # content_len = safe_get_element("content-length", header_map)
+        content_len = safe_get_element("content-range", header_map)
         etag = safe_get_element("etag", header_map).upper()
         return response.read(), etag, content_len
 
