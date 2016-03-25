@@ -1,11 +1,10 @@
 __author__ = 'waen'
 import os
 import mimetypes
+import logging
 
-try:
-    from cStringIO import StringIO
-except ImportError:
-    from StringIO import StringIO
+
+from io import BytesIO
 
 from django.conf import settings
 from django.core.files.base import File
@@ -22,6 +21,8 @@ DEFAULT_ACL         = getattr(settings, 'OSS_DEFAULT_ACL', 'public-read')
 OSS_STORAGE_BUCKET_NAME = getattr(settings, 'OSS_STORAGE_BUCKET_NAME')
 BUCKET_PREFIX       = getattr(settings, 'OSS_BUCKET_PREFIX', '')
 
+
+logger = logging.getLogger(__name__)
 
 class OSSStorage(Storage):
     """Aliyun Open Storage Service"""
@@ -73,7 +74,8 @@ class OSSStorage(Storage):
             'Content-Type': content_type,
             'Content-Length': str(len(content)),
         })
-        fp = StringIO(content)
+        fp = BytesIO(content)
+        logger.debug('')
         response = self.connection.put_object_from_fp(self.bucket, name, fp, content_type, self.headers)
         if (response.status / 100) != 2:
             raise IOError("OSSStorageError: %s" % response.read())
@@ -102,7 +104,7 @@ class OSSStorage(Storage):
         name = self._clean_name(name)
         content.open()
         if hasattr(content, 'chunks'):
-            content_str = ''.join(chunk for chunk in content.chunks())
+            content_str = b''.join(chunk for chunk in content.chunks())
         else:
             content_str = content.read()
         self._put_file(name, content_str)
@@ -172,7 +174,7 @@ class OSSStorageFile(File):
         self._storage = storage
         self._mode = mode
         self._is_dirty = False
-        self.file = StringIO()
+        self.file = BytesIO()
         self.start_range = 0
 
     @property
@@ -192,13 +194,13 @@ class OSSStorageFile(File):
             current_range, size = content_range.split(' ', 1)[1].split('/', 1)
             start_range, end_range = current_range.split('-', 1)
             self._size, self.start_range = int(size), int(end_range)+1
-        self.file = StringIO(data)
+        self.file = BytesIO(data)
         return self.file.getvalue()
 
     def write(self, content):
         if 'w' not in self._mode:
             raise AttributeError("File was opened for read-only access.")
-        self.file = StringIO(content)
+        self.file = BytesIO(content)
         self._is_dirty = True
 
     def close(self):

@@ -28,7 +28,7 @@ class ErrorXml:
         self.host_id = get_tag_text(self.xml, 'HostId')
     
     def show(self):
-        print "Code: %s\nMessage: %s\nResource: %s\nRequestId: %s \nHostId: %s" % (self.code, self.msg, self.resource, self.request_id, self.host_id)
+        print("Code: %s\nMessage: %s\nResource: %s\nRequestId: %s \nHostId: %s" % (self.code, self.msg, self.resource, self.request_id, self.host_id))
 
 class Owner:
     def __init__(self, xml_element):
@@ -37,7 +37,7 @@ class Owner:
         self.display_name = get_tag_text(self.element, "DisplayName")
     
     def show(self):
-        print "ID: %s\nDisplayName: %s" % (self.id, self.display_name)
+        print("ID: %s\nDisplayName: %s" % (self.id, self.display_name))
 
 class Bucket:
     def __init__(self, xml_element):
@@ -47,7 +47,7 @@ class Bucket:
         self.creation_date = get_tag_text(self.element, "CreationDate")
     
     def show(self):
-        print "Name: %s\nCreationDate: %s\nLocation: %s" % (self.name, self.creation_date, self.location)
+        print("Name: %s\nCreationDate: %s\nLocation: %s" % (self.name, self.creation_date, self.location))
 
 class GetServiceXml:
     def __init__(self, xml_string):
@@ -59,12 +59,12 @@ class GetServiceXml:
             self.bucket_list.append(Bucket(b))
 
     def show(self):
-        print "Owner:"
+        print("Owner:")
         self.owner.show()
-        print "\nBucket list:"
+        print("\nBucket list:")
         for b in self.bucket_list:
             b.show()
-            print ""
+            print("")
 
     def list(self):
         bl = []
@@ -83,7 +83,7 @@ class Content:
         self.storage_class = get_tag_text(self.element, "StorageClass")        
 
     def show(self):
-        print "Key: %s\nLastModified: %s\nETag: %s\nSize: %s\nStorageClass: %s" % (self.key, self.last_modified, self.etag, self.size, self.storage_class)
+        print("Key: %s\nLastModified: %s\nETag: %s\nSize: %s\nStorageClass: %s" % (self.key, self.last_modified, self.etag, self.size, self.storage_class))
         self.owner.show()
 
 class Part:
@@ -95,7 +95,7 @@ class Part:
         self.etag = get_tag_text(self.element, "ETag")
 
     def show(self):
-        print "PartNumber: %s\nPartName: %s\nPartSize: %s\nETag: %s\n" % (self.part_num, self.object_name, self.object_size, self.etag)
+        print("PartNumber: %s\nPartName: %s\nPartSize: %s\nETag: %s\n" % (self.part_num, self.object_name, self.object_size, self.etag))
 
 class PostObjectGroupXml:
     def __init__(self, xml_string):
@@ -106,7 +106,7 @@ class PostObjectGroupXml:
         self.etag = get_tag_text(self.xml, "ETag")
 
     def show(self):
-        print "Post Object Group, Bucket: %s\nKey: %s\nSize: %s\nETag: %s" % (self.bucket, self.key, self.size, self.etag)
+        print("Post Object Group, Bucket: %s\nKey: %s\nSize: %s\nETag: %s" % (self.bucket, self.key, self.size, self.etag))
 
 class GetObjectGroupIndexXml:
     def __init__(self, xml_string):
@@ -127,8 +127,8 @@ class GetObjectGroupIndexXml:
         return index_list
 
     def show(self):
-        print "Bucket: %s\nObject: %s\nEtag: %s\nObjectSize: %s" % (self.bucket, self.key, self.etag, self.file_length)
-        print "\nPart list:"
+        print("Bucket: %s\nObject: %s\nEtag: %s\nObjectSize: %s" % (self.bucket, self.key, self.etag, self.file_length))
+        print("\nPart list:")
         for p in self.index_list:
             p.show()
 
@@ -155,14 +155,14 @@ class GetBucketXml:
             self.content_list.append(Content(c))
 
     def show(self):
-        print "Name: %s\nPrefix: %s\nMarker: %s\nNextMarker: %s\nMaxKeys: %s\nDelimiter: %s\nIsTruncated: %s" % (self.name, self.prefix, self.marker, self.nextmarker, self.maxkeys, self.delimiter, self.is_truncated)
-        print "\nPrefix list:"
+        print("Name: %s\nPrefix: %s\nMarker: %s\nNextMarker: %s\nMaxKeys: %s\nDelimiter: %s\nIsTruncated: %s" % (self.name, self.prefix, self.marker, self.nextmarker, self.maxkeys, self.delimiter, self.is_truncated))
+        print("\nPrefix list:")
         for p in self.prefix_list:
-            print p
-        print "\nContent list:"
+            print(p)
+        print("\nContent list:")
         for c in self.content_list:
             c.show()
-            print ""
+            print("")
 
     def list(self):
         cl = []
@@ -184,7 +184,7 @@ class GetBucketAclXml:
         self.grant = get_tag_text(self.xml, 'Grant')
 
     def show(self):
-        print "Owner Name: %s\nOwner ID: %s\nGrant: %s" % (self.owner.id, self.owner.display_name, self.grant)
+        print("Owner Name: %s\nOwner ID: %s\nGrant: %s" % (self.owner.id, self.owner.display_name, self.grant))
  
 class GetBucketLocationXml:
     def __init__(self, xml_string):
@@ -192,7 +192,7 @@ class GetBucketLocationXml:
         self.location = get_tag_text(self.xml, 'LocationConstraint')
     
     def show(self):
-        print "LocationConstraint: %s" % (self.location)
+        print("LocationConstraint: %s" % (self.location))
 
 class GetInitUploadIdXml:
     def __init__(self, xml_string):
@@ -204,7 +204,7 @@ class GetInitUploadIdXml:
         self.marker = get_tag_text(self.xml, 'Marker')
        
     def show(self):
-        print " "     
+        print(" ")     
 
 class Upload:
     def __init__(self, xml_element):
