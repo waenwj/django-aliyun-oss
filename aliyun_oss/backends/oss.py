@@ -183,7 +183,7 @@ class OSSStorageFile(File):
         return self._size
 
     def read(self, num_bytes=None):
-        if self.end_range == -1:
+        if self.start_range == -1:
             return None
         if num_bytes is None:
             args = []
@@ -199,7 +199,7 @@ class OSSStorageFile(File):
             start_range, end_range = current_range.split('-', 1)
             self._size, self.start_range = int(size), int(end_range) + 1
         else:
-            self.end_range = -1
+            self.start_range = -1
         self.file = BytesIO(data)
         return self.file.getvalue()
 
