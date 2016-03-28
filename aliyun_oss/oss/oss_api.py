@@ -23,12 +23,13 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
 # IN THE SOFTWARE.
 
-import httplib
+import http.client
 import time
 import base64
-import urllib
-import StringIO
+import urllib.request, urllib.parse, urllib.error
+import io
 import sys
+import logging
 try:
     from aliyun_oss.oss.oss_util import *
 except:
@@ -37,6 +38,8 @@ try:
     from aliyun_oss.oss.oss_xml_handler import *
 except:
     from aliyun_oss.oss.oss_xml_handler import *
+
+logger = logging.getLogger(__name__)
 
 class OssAPI:
     '''
@@ -63,8 +66,8 @@ class OssAPI:
 
     def set_debug(self, is_debug):
         if is_debug:
-            self.debug = True 
-        
+            self.debug = True
+
     def set_retry_times(self, retry_times=5):
         self.retry_times = retry_times
 
@@ -79,13 +82,15 @@ class OssAPI:
             self.RecvBufferSize = (int)(buf_size)
         except ValueError:
             pass
-    
+
     def get_connection(self, tmp_host=None):
         host = ''
         port = 80
         timeout = 10
         if not tmp_host:
             tmp_host = self.host
+        if isinstance(tmp_host, bytes):
+            tmp_host = tmp_host.decode()
         host_port_list = tmp_host.split(":")
         if len(host_port_list) == 1:
             host = host_port_list[0].strip()
@@ -95,14 +100,14 @@ class OssAPI:
         if self.is_security or port == 443:
             self.is_security = True
             if sys.version_info >= (2, 6):
-                return httplib.HTTPSConnection(host=host, port=port, timeout=timeout)
+                return http.client.HTTPSConnection(host=host, port=port, timeout=timeout)
             else:
-                return httplib.HTTPSConnection(host=host, port=port)
+                return http.client.HTTPSConnection(host=host, port=port)
         else:
             if sys.version_info >= (2, 6):
-                return httplib.HTTPConnection(host=host, port=port, timeout=timeout)
+                return http.client.HTTPConnection(host=host, port=port, timeout=timeout)
             else:
-                return httplib.HTTPConnection(host=host, port=port)
+                return http.client.HTTPConnection(host=host, port=port)
 
     def sign_url_auth_with_expire_time(self, method, url, headers=None, resource="/", timeout=60, params=None):
         '''
@@ -132,6 +137,7 @@ class OssAPI:
             params = {}
         send_time = str(int(time.time()) + timeout)
         headers['Date'] = send_time
+        # logger.debug('***find bytes 1*** {}'.format(resource))
         auth_value = get_assign(self.secret_access_key, method, headers, resource, None, self.debug)
         params["OSSAccessKeyId"] = self.access_id
         params["Expires"] = str(send_time)
@@ -173,9 +179,10 @@ class OssAPI:
             params = {}
         send_time = str(int(time.time()) + timeout)
         headers['Date'] = send_time
-        if isinstance(object, unicode):
-            object = object.encode('utf-8')
+        if isinstance(object, bytes):
+            object = object.decode('utf-8')
         resource = "/%s/%s%s" % (bucket, object, get_resource(params))
+        # logger.debug('***find bytes 2*** {}'.format(resource))
         auth_value = get_assign(self.secret_access_key, method, headers, resource, None, self.debug)
         params["OSSAccessKeyId"] = self.access_id
         params["Expires"] = str(send_time)
@@ -212,6 +219,7 @@ class OssAPI:
         Returns:
             signature string
         '''
+        # logger.debug('***find bytes 3*** {}'.format(resource))
         auth_value = "%s %s:%s" % (self.provider, self.access_id, get_assign(self.secret_access_key, method, headers, resource, None, self.debug))
         return auth_value
 
@@ -262,7 +270,7 @@ class OssAPI:
             else:
                 return res
         return res
-        
+
     def http_request_with_redirect(self, method, bucket, object, headers=None, body='', params=None):
         '''
         Send http request of operation
@@ -285,20 +293,22 @@ class OssAPI:
         Returns:
             HTTP Response
         '''
+
         if not params:
             params = {}
         if not headers:
             headers = {}
-        if isinstance(object, unicode):
-            object = object.encode('utf-8')
+        if isinstance(object, bytes):
+            object = object.decode('utf-8')
         if not bucket:
             resource = "/"
             headers['Host'] = self.host
         else:
             headers['Host'] = "%s.%s" % (bucket, self.host)
             resource = "/%s/" % bucket
-        resource = "%s%s%s" % (resource.encode('utf-8'), object, get_resource(params))
-        object = urllib.quote(object)
+        # logger.debug('http_request_with_redirect: resource: {}, object: {}, get_resource(params): {}'.format(resource, object, get_resource(params)))
+        resource = "%s%s%s" % (resource, object, get_resource(params))
+        object = urllib.parse.quote(object)
         url = "/%s" % object
         if is_ip(self.host):
             url = "/%s/%s" % (bucket, object)
@@ -308,8 +318,9 @@ class OssAPI:
         url = append_param(url, params)
         date = time.strftime("%a, %d %b %Y %H:%M:%S GMT", time.gmtime())
         headers['Date'] = date
+        # logger.debug("headers['Authorization']: method: {}, headers: {}, resource: {}".format(method, headers, resource))
         headers['Authorization'] = self._create_sign_for_normal_auth(method, headers, resource)
-        headers['User-Agent'] = self.agent 
+        headers['User-Agent'] = self.agent
         if check_bucket_valid(bucket) and not is_ip(self.host):
             conn = self.get_connection(headers['Host'])
         else:
@@ -328,7 +339,7 @@ class OssAPI:
         List all buckets of user
         type headers: dict
         :param
-        
+
         Returns:
             HTTP Response
         '''
@@ -531,7 +542,7 @@ class OssAPI:
             headers = {}
         headers['Content-Type'] = content_type
         headers['Content-Length'] = str(len(input_content))
-        fp = StringIO.StringIO(input_content)
+        fp = io.StringIO(input_content)
         res = self.put_object_from_fp(bucket, object, fp, content_type, headers, params)
         fp.close()
         return res
@@ -567,14 +578,14 @@ class OssAPI:
         if not headers:
             headers = {}
         method = 'PUT'
-        if isinstance(object, unicode):
-            object = object.encode('utf-8')
+        if isinstance(object, bytes):
+            object = object.decode('utf-8')
         resource = "/%s/" % bucket
         if not bucket:
             resource = "/"
-        resource = "%s%s%s" % (resource.encode('utf-8'), object, get_resource(params))
+        resource = "%s%s%s" % (resource, object, get_resource(params))
 
-        object = urllib.quote(object)
+        object = urllib.parse.quote(object)
         url = "/%s" % object
         if bucket:
             headers['Host'] = "%s.%s" % (bucket, self.host)
@@ -591,14 +602,14 @@ class OssAPI:
         else:
             conn = self.get_connection()
         conn.putrequest(method, url)
-        if isinstance(content_type, unicode):
-            content_type = content_type.encode('utf-8')
+        if isinstance(content_type, bytes):
+            content_type = content_type.decode('utf-8')
         headers["Content-Type"] = content_type
         headers["Content-Length"] = filesize
         headers["Date"] = date
         headers["Expect"] = "100-Continue"
-        headers['User-Agent'] = self.agent 
-        for k in headers.keys():
+        headers['User-Agent'] = self.agent
+        for k in list(headers.keys()):
             conn.putheader(str(k), str(headers[k]))
         if '' != self.secret_access_key and '' != self.access_id:
             auth = self._create_sign_for_normal_auth(method, headers, resource)
@@ -638,7 +649,7 @@ class OssAPI:
     def view_bar(self, num=1, sum=100):
         rate = float(num) / float(sum)
         rate_num = int(rate * 100)
-        print '\r%d%% ' % (rate_num),
+        print('\r%d%% ' % (rate_num), end=' ')
         sys.stdout.flush()
 
     def put_object_from_fp(self, bucket, object, fp, content_type=DefaultContentType, headers=None, params=None):
@@ -663,6 +674,7 @@ class OssAPI:
         Returns:
             HTTP Response
         '''
+        # logger.debug(str(bucket)+str(object)+str(fp)+str(content_type)+str(headers)+str(params))
         tmp_object = object
         tmp_headers = {}
         tmp_params = {}
@@ -680,7 +692,7 @@ class OssAPI:
         retry_times = 0
         while len(l) > 0:
             if retry_times > 100:
-                print "retry too many times"
+                print("retry too many times")
                 raise
             try:
                 conn.send(l)
@@ -832,7 +844,7 @@ class OssAPI:
             headers = {}
         if not params:
             params = {}
-        if not headers.has_key('Content-Type'):
+        if 'Content-Type' not in headers:
             content_type = get_content_type_by_filename(object)
             headers['Content-Type'] = content_type
         body = object_group_msg_xml
@@ -955,10 +967,10 @@ class OssAPI:
 
         :type max_part_num: int
         :param
-        
+
         :type headers: dict
         :param
-        
+
         Returns:
             HTTP Response
 
@@ -967,8 +979,8 @@ class OssAPI:
         #get part_msg_list
         if not headers:
             headers = {}
-        if isinstance(filename, unicode):
-            filename = filename.encode('utf-8')
+        if isinstance(filename, bytes):
+            filename = filename.decode('utf-8')
         part_msg_list = split_large_file(filename, object, max_part_num)
         #make sure all the parts are put into same bucket
         if len(part_msg_list) < thread_num and len(part_msg_list) != 0:
@@ -978,7 +990,7 @@ class OssAPI:
         while(retry_times >= 0):
             try:
                 threadpool = []
-                for i in xrange(0, thread_num):
+                for i in range(0, thread_num):
                     if i == thread_num - 1:
                         end = len(part_msg_list)
                     else:
@@ -994,14 +1006,14 @@ class OssAPI:
             except:
                 retry_times = retry_times -1
         if -1 >= retry_times:
-            print "after retry %s, failed, upload large file failed!" % retry_times
+            print("after retry %s, failed, upload large file failed!" % retry_times)
             return
         #get xml string that contains msg of object group
         object_group_msg_xml = create_object_group_msg_xml(part_msg_list)
         content_type = get_content_type_by_filename(filename)
-        if isinstance(content_type, unicode):
-            content_type = content_type.encode('utf-8')
-        if not headers.has_key('Content-Type'):
+        if isinstance(content_type, bytes):
+            content_type = content_type.decode('utf-8')
+        if 'Content-Type' not in headers:
             headers['Content-Type'] = content_type
         return self.post_object_group(bucket, object, object_group_msg_xml, headers)
 
@@ -1029,9 +1041,9 @@ class OssAPI:
         '''
         if not headers:
             headers = {}
-        if isinstance(source_object, unicode):
+        if isinstance(source_object, str):
             source_object = source_object.encode('utf-8')
-        source_object = urllib.quote(source_object)
+        source_object = urllib.parse.quote(source_object)
         headers['x-oss-copy-source'] = "/%s/%s" % (source_bucket, source_object)
         method = 'PUT'
         body = ''
@@ -1069,19 +1081,19 @@ class OssAPI:
         List all upload parts of given upload_id
         :type bucket: string
         :param
-        
+
         :type object: string
         :param
-        
+
         :type upload_id: string
         :param
-       
+
         :type max_parts: int
-        :param 
+        :param
 
         :type part_number_marker: string
         :param
-        
+
         Returns:
             HTTP Response
         '''
@@ -1143,7 +1155,7 @@ class OssAPI:
     def upload_part(self, bucket, object, filename, upload_id, part_number, headers=None, params=None):
         '''
         Upload the content of filename as one part of given upload_id
-        
+
         :type bucket: string
         :param
 
@@ -1156,7 +1168,7 @@ class OssAPI:
         :type upload_id: string
         :param
 
-        :type part_number: int 
+        :type part_number: int
         :param
 
         :type headers: dict
@@ -1178,7 +1190,7 @@ class OssAPI:
     def upload_part_from_string(self, bucket, object, data, upload_id, part_number, headers=None, params=None):
         '''
         Upload the content of string as one part of given upload_id
-        
+
         :type bucket: string
         :param
 
@@ -1191,7 +1203,7 @@ class OssAPI:
         :type upload_id: string
         :param
 
-        :type part_number: int 
+        :type part_number: int
         :param
 
         :type headers: dict
@@ -1208,7 +1220,7 @@ class OssAPI:
         params['partNumber'] = part_number
         params['uploadId'] = upload_id
         content_type = ''
-        fp = StringIO.StringIO(data)
+        fp = io.StringIO(data)
         return self.put_object_from_fp(bucket, object, fp, content_type, headers, params)
 
     def complete_upload(self, bucket, object, upload_id, part_msg_xml, headers=None, params=None):
@@ -1220,7 +1232,7 @@ class OssAPI:
 
         :type object: string
         :param
-        
+
         :type upload_id: string
         :param
 
@@ -1244,7 +1256,7 @@ class OssAPI:
         body = part_msg_xml
         headers['Content-Length'] = str(len(body))
         params['uploadId'] = upload_id
-        if not headers.has_key('Content-Type'):
+        if 'Content-Type' not in headers:
             content_type = get_content_type_by_filename(object)
             headers['Content-Type'] = content_type
         return self.http_request(method, bucket, object, headers, body, params)
@@ -1273,7 +1285,7 @@ class OssAPI:
         if not params:
             params = {}
         method = 'DELETE'
-        if isinstance(upload_id, unicode):
+        if isinstance(upload_id, str):
             upload_id = upload_id.encode('utf-8')
         params['uploadId'] = upload_id
         body = ''
@@ -1294,7 +1306,7 @@ class OssAPI:
 
         :type upload_id: string
         :param
-    
+
         :type thread_num: int
         :param
 
@@ -1324,12 +1336,12 @@ class OssAPI:
             raise Exception("-1, Cannot get upload id.")
         #split the large file into 1000 parts or many parts
         #get part_msg_list
-        if isinstance(filename, unicode):
+        if isinstance(filename, str):
             filename = filename.encode('utf-8')
         part_msg_list = split_large_file(filename, object, max_part_num)
         # logger = getlogger(self.debug)
         # logger.info("bucket:%s, object:%s, upload_id is: %s, split_number:%d" % (bucket, object, upload_id, len(part_msg_list)))
-        
+
         #make sure all the parts are put into same bucket
         if len(part_msg_list) < thread_num and len(part_msg_list) != 0:
             thread_num = len(part_msg_list)
@@ -1345,7 +1357,7 @@ class OssAPI:
             while(retry_times >= 0):
                 threadpool = []
                 try:
-                    for i in xrange(0, thread_num):
+                    for i in range(0, thread_num):
                         if i == thread_num - 1:
                             end = len(part_msg_list)
                         else:
@@ -1470,7 +1482,7 @@ class OssAPI:
         return False
 
     def get_object_info(self, bucket, object, headers=None, params=None):
-        ''' 
+        '''
         Get object information
         :type bucket: string
         :param:
