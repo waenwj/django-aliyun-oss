@@ -40,3 +40,10 @@ OSS_HEADERS = {
 
 
 
+
+## 从requirements.txt安装
+
+> -e git+https://github.com/SUNNYWILLHAPPEN/django-aliyun-oss.git#egg=django-aliyun-oss
+> 
+
+上述内容添加到requirements.txt即可。
