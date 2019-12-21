@@ -1,3 +1,6 @@
+### Deprecated. Please use  https://github.com/aliyun/django-oss-storage
+
+
 django-aliyun-oss
 =================
 
